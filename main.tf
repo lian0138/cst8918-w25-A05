@@ -24,7 +24,7 @@ provider "cloudinit" {
 
 # === Variables ===
 variable "labelPrefix" {
-  description = "lian0138"
+  description = "College username for resource prefix"
   type        = string
 }
 
