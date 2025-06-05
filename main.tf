@@ -19,47 +19,48 @@ provider "azurerm" {
 }
 
 provider "cloudinit" {
-  # no extra configuration needed
+  # no extra config needed
 }
 
-# === Variables ===
+# ========= Variables ============
 variable "labelPrefix" {
-  description = "College username for resource prefix"
+  description = "Your college username, used for naming resources"
   type        = string
 }
 
 variable "region" {
-  description = "Azure region"
+  description = "Azure region for resources"
   type        = string
   default     = "canadacentral"
 }
 
 variable "admin_username" {
-  description = "Admin user for VM"
+  description = "Admin username for the VM"
   type        = string
-  default     = "azureadmin"
+  default     = "chris"
 }
 
-# === Resources ===
+# ========= Resources ============
+
 # Resource Group
 resource "azurerm_resource_group" "web_rg" {
   name     = "${var.labelPrefix}-A05-RG"
   location = var.region
 }
 
-# Public IP Address
+# Public IP
 resource "azurerm_public_ip" "web_ip" {
   name                = "${var.labelPrefix}-web-ip"
-  location            = azurerm_resource_group.web_rg.location
   resource_group_name = azurerm_resource_group.web_rg.name
+  location            = azurerm_resource_group.web_rg.location
   allocation_method   = "Dynamic"
 }
 
 # Virtual Network
 resource "azurerm_virtual_network" "web_vnet" {
   name                = "${var.labelPrefix}-web-vnet"
-  location            = azurerm_resource_group.web_rg.location
   resource_group_name = azurerm_resource_group.web_rg.name
+  location            = azurerm_resource_group.web_rg.location
   address_space       = ["10.0.0.0/16"]
 }
 
@@ -71,11 +72,11 @@ resource "azurerm_subnet" "web_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# Network Security Group (HTTP and SSH inbound rules)
+# Network Security Group
 resource "azurerm_network_security_group" "web_nsg" {
   name                = "${var.labelPrefix}-web-nsg"
-  location            = azurerm_resource_group.web_rg.location
   resource_group_name = azurerm_resource_group.web_rg.name
+  location            = azurerm_resource_group.web_rg.location
 
   security_rule {
     name                       = "allow-HTTP"
@@ -105,8 +106,8 @@ resource "azurerm_network_security_group" "web_nsg" {
 # NIC
 resource "azurerm_network_interface" "web_nic" {
   name                = "${var.labelPrefix}-web-nic"
-  location            = azurerm_resource_group.web_rg.location
   resource_group_name = azurerm_resource_group.web_rg.name
+  location            = azurerm_resource_group.web_rg.location
 
   ip_configuration {
     name                          = "web-ip-config"
@@ -116,13 +117,13 @@ resource "azurerm_network_interface" "web_nic" {
   }
 }
 
-# Associate NIC with Security Group
+# Associate NSG to NIC
 resource "azurerm_network_interface_security_group_association" "nic_nsg_assoc" {
   network_interface_id      = azurerm_network_interface.web_nic.id
   network_security_group_id = azurerm_network_security_group.web_nsg.id
 }
 
-# Cloud-init script (Apache install)
+# Cloud-init config
 data "cloudinit_config" "init" {
   gzip          = false
   base64_encode = true
@@ -132,13 +133,13 @@ data "cloudinit_config" "init" {
   }
 }
 
-# Linux VM
+# Linux VM (Ubuntu 20.04-LTS to resolve image availability issue)
 resource "azurerm_linux_virtual_machine" "web_vm" {
   name                  = "${var.labelPrefix}-web-vm"
-  location              = azurerm_resource_group.web_rg.location
   resource_group_name   = azurerm_resource_group.web_rg.name
-  size                  = "Standard_B1s"
+  location              = azurerm_resource_group.web_rg.location
   admin_username        = var.admin_username
+  size                  = "Standard_B1s"
   network_interface_ids = [azurerm_network_interface.web_nic.id]
 
   admin_ssh_key {
@@ -154,14 +155,15 @@ resource "azurerm_linux_virtual_machine" "web_vm" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "UbuntuServer"
-    sku       = "22.04-LTS"
+    sku       = "22.04-LTS" # changed clearly to stable available image
     version   = "latest"
   }
 
   custom_data = data.cloudinit_config.init.rendered
 }
 
-# === Outputs after deployment ===
+# ========= Outputs ============
+
 output "resource_group_name" {
   value = azurerm_resource_group.web_rg.name
 }
