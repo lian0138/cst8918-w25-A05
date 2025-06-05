@@ -19,36 +19,30 @@ provider "azurerm" {
 }
 
 provider "cloudinit" {
-  # no extra config needed
 }
 
-# ========= Variables ============
 variable "labelPrefix" {
-  description = "Your college username, used for naming resources"
+  description = "Your college username. This will form the beginning of various resource names."
   type        = string
 }
 
 variable "region" {
-  description = "Azure region for resources"
+  description = "Azure region"
   type        = string
   default     = "canadacentral"
 }
 
 variable "admin_username" {
-  description = "Admin username for the VM"
+  description = "Admin username for Linux VM"
   type        = string
   default     = "chris"
 }
 
-# ========= Resources ============
-
-# Resource Group
 resource "azurerm_resource_group" "web_rg" {
   name     = "${var.labelPrefix}-A05-RG"
   location = var.region
 }
 
-# Public IP
 resource "azurerm_public_ip" "web_ip" {
   name                = "${var.labelPrefix}-web-ip"
   resource_group_name = azurerm_resource_group.web_rg.name
@@ -56,7 +50,6 @@ resource "azurerm_public_ip" "web_ip" {
   allocation_method   = "Dynamic"
 }
 
-# Virtual Network
 resource "azurerm_virtual_network" "web_vnet" {
   name                = "${var.labelPrefix}-web-vnet"
   resource_group_name = azurerm_resource_group.web_rg.name
@@ -64,7 +57,6 @@ resource "azurerm_virtual_network" "web_vnet" {
   address_space       = ["10.0.0.0/16"]
 }
 
-# Subnet
 resource "azurerm_subnet" "web_subnet" {
   name                 = "web-subnet"
   resource_group_name  = azurerm_resource_group.web_rg.name
@@ -72,7 +64,6 @@ resource "azurerm_subnet" "web_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# Network Security Group
 resource "azurerm_network_security_group" "web_nsg" {
   name                = "${var.labelPrefix}-web-nsg"
   resource_group_name = azurerm_resource_group.web_rg.name
@@ -103,12 +94,11 @@ resource "azurerm_network_security_group" "web_nsg" {
   }
 }
 
-# NIC
 resource "azurerm_network_interface" "web_nic" {
   name                = "${var.labelPrefix}-web-nic"
   resource_group_name = azurerm_resource_group.web_rg.name
   location            = azurerm_resource_group.web_rg.location
-
+  
   ip_configuration {
     name                          = "web-ip-config"
     subnet_id                     = azurerm_subnet.web_subnet.id
@@ -117,13 +107,11 @@ resource "azurerm_network_interface" "web_nic" {
   }
 }
 
-# Associate NSG to NIC
 resource "azurerm_network_interface_security_group_association" "nic_nsg_assoc" {
   network_interface_id      = azurerm_network_interface.web_nic.id
   network_security_group_id = azurerm_network_security_group.web_nsg.id
 }
 
-# Cloud-init config
 data "cloudinit_config" "init" {
   gzip          = false
   base64_encode = true
@@ -133,13 +121,12 @@ data "cloudinit_config" "init" {
   }
 }
 
-# Linux VM (Ubuntu 20.04-LTS to resolve image availability issue)
 resource "azurerm_linux_virtual_machine" "web_vm" {
-  name                  = "${var.labelPrefix}-web-vm"
-  resource_group_name   = azurerm_resource_group.web_rg.name
-  location              = azurerm_resource_group.web_rg.location
-  admin_username        = var.admin_username
-  size                  = "Standard_B1s"
+  name                = "${var.labelPrefix}-web-vm"
+  resource_group_name = azurerm_resource_group.web_rg.name
+  location            = azurerm_resource_group.web_rg.location
+  admin_username      = var.admin_username
+  size                = "Standard_B1s"
   network_interface_ids = [azurerm_network_interface.web_nic.id]
 
   admin_ssh_key {
@@ -154,20 +141,13 @@ resource "azurerm_linux_virtual_machine" "web_vm" {
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "22.04-LTS" # changed clearly to stable available image
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
     version   = "latest"
   }
 
   custom_data = data.cloudinit_config.init.rendered
 }
 
-# ========= Outputs ============
-
-output "resource_group_name" {
-  value = azurerm_resource_group.web_rg.name
-}
-
-output "vm_public_ip" {
-  value = azurerm_public_ip.web_ip.ip_address
-}
+output "resource_group_name" { value = azurerm_resource_group.web_rg.name }
+output "vm_public_ip" { value = azurerm_public_ip.web_ip.ip_address }
